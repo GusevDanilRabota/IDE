@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QSplitter, QMessageBox, QInputDialog
 )
 from PySide6.QtCore import Signal, Qt
+from PySide6.QtGui import QStandardItemModel, QStandardItem
 from .model import OutlineModel
 from .parser import parse_python, parse_c, parse_assembly
 

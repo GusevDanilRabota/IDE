@@ -97,10 +97,19 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
 
+def load_stylesheet(app):
+    style_path = os.path.join(os.path.dirname(__file__), "resources", "style.qss")
+    if os.path.exists(style_path):
+        with open(style_path, "r", encoding="utf-8") as f:
+            app.setStyleSheet(f.read())
+    else:
+        print("Файл стилей не найден, используются стандартные настройки")
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setOrganizationName("MyIDE")
     app.setApplicationName("ModularIDE")
+    load_stylesheet(app)
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
