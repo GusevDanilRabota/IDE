@@ -1,8 +1,9 @@
+# widget.py (дополненный)
 import os
 from PySide6.QtCore import QSettings, Signal, Qt, QSize
 from PySide6.QtWidgets import (
     QDockWidget, QTreeView, QVBoxLayout, QWidget, QLineEdit,
-    QMenu, QToolBar, QComboBox, QLabel, QPushButton, QHBoxLayout
+    QMenu, QToolBar, QComboBox, QLabel
 )
 from .model import FileSystemModel, FileSystemProxyModel
 from .actions import FileExplorerActions
@@ -22,7 +23,7 @@ class FileExplorerPanel(QDockWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Панель инструментов
+        # Панель инструментов (поиск, фильтр)
         toolbar = QToolBar()
         icon_size = self.style().pixelMetric(self.style().PixelMetric.PM_SmallIconSize)
         toolbar.setIconSize(QSize(icon_size, icon_size))
@@ -71,7 +72,18 @@ class FileExplorerPanel(QDockWidget):
         # Настройки
         self._show_hidden = False
         self._pinned_folders = []
+        self._vcs = None
         self._load_settings()
+
+    def set_vcs(self, vcs):
+        self._vcs = vcs
+        self.update_vcs_status()
+        self._vcs.status_changed.connect(self.update_vcs_status)
+
+    def update_vcs_status(self):
+        if self._vcs:
+            status = self._vcs.get_status()
+            self.model.set_vcs_status(status)
 
     def _on_double_click(self, index):
         src = self.proxy_model.mapToSource(index)
@@ -79,11 +91,13 @@ class FileExplorerPanel(QDockWidget):
         if not self.model.isDir(src):
             self.file_activated.emit(path)
 
-    def _show_context_menu(self, pos):
-        index = self.tree.indexAt(pos)
+    def _show_context_menu(self, position):
+        index = self.tree.indexAt(position)
         if index.isValid():
             self.tree.setCurrentIndex(index)
         menu = QMenu()
+
+        # Базовые действия с файлами
         menu.addAction(self.actions.action_new_file)
         menu.addAction(self.actions.action_new_folder)
         menu.addSeparator()
@@ -94,19 +108,60 @@ class FileExplorerPanel(QDockWidget):
         menu.addAction(self.actions.action_copy_path)
         menu.addAction(self.actions.action_open_in_explorer)
         menu.addSeparator()
+
+        # Избранное (pinned folders)
         if index.isValid():
             path = self.actions._current_path()
             if path in self._pinned_folders:
                 menu.addAction(self.actions.action_remove_from_pinned)
             else:
                 menu.addAction(self.actions.action_add_to_pinned)
-        menu.addSeparator()
+            menu.addSeparator()
+
+        # Действия контроля версий (если VCS активна)
+        if self._vcs and index.isValid():
+            path = self.actions._current_path()
+            # Определяем относительный путь от корня репозитория
+            try:
+                rel_path = os.path.relpath(path, self.model.rootPath()).replace('\\', '/')
+            except ValueError:
+                rel_path = path
+            status_map = self._vcs.get_status()
+            status = status_map.get(rel_path)
+
+            vcs_menu = menu.addMenu("Контроль версий")
+            if status == 'untracked':
+                vcs_menu.addAction("Добавить в индекс (add)", lambda: self._vcs.add(rel_path))
+            elif status == 'modified':
+                vcs_menu.addAction("Добавить в индекс (add)", lambda: self._vcs.add(rel_path))
+                vcs_menu.addAction("Откатить изменения (discard)", lambda: self._vcs.discard_changes(rel_path))
+            elif status == 'staged':
+                vcs_menu.addAction("Убрать из индекса (unstage)", lambda: self._vcs.unstage(rel_path))
+            if status and status != 'ignored':
+                vcs_menu.addSeparator()
+                vcs_menu.addAction("Показать изменения (diff)", lambda: self._show_diff(rel_path))
+
+        # Навигация по дереву
         menu.addAction(self.actions.action_collapse_all)
         menu.addAction(self.actions.action_expand_all)
         menu.addSeparator()
         menu.addAction(self.actions.action_refresh)
         menu.addAction(self.actions.action_show_hidden)
-        menu.exec_(self.tree.viewport().mapToGlobal(pos))
+
+        # Показываем меню в глобальных координатах
+        menu.exec_(self.tree.viewport().mapToGlobal(position))
+
+    def _show_diff(self, rel_path):
+        # Показать diff в отдельном окне или в панели вывода
+        diff_text = self._vcs.diff(rel_path)
+        from PySide6.QtWidgets import QTextEdit, QDialog, QVBoxLayout
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Diff: {rel_path}")
+        layout = QVBoxLayout(dlg)
+        text_edit = QTextEdit()
+        text_edit.setPlainText(diff_text)
+        layout.addWidget(text_edit)
+        dlg.exec()
 
     def _on_search_changed(self, text):
         self.proxy_model.set_filter_text(text)

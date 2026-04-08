@@ -1,9 +1,8 @@
 # model.py
 import os
-import hashlib
-from PySide6.QtCore import QDir, Qt, QSortFilterProxyModel, QTimer
+from PySide6.QtCore import QDir, Qt, QSortFilterProxyModel
 from PySide6.QtWidgets import QFileSystemModel, QFileIconProvider
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QBrush
 
 class FileSystemModel(QFileSystemModel):
     def __init__(self, parent=None):
@@ -11,11 +10,12 @@ class FileSystemModel(QFileSystemModel):
         self.setRootPath(QDir.currentPath())
         self.setFilter(QDir.AllDirs | QDir.Files | QDir.NoDotAndDotDot)
         self.icon_provider = QFileIconProvider()
-        self.icon_cache = {}    # кэш иконок по расширению
-        self.vcs_status = {}    # будет заполняться извне
+        self.icon_cache = {}
+        self.vcs_status = {}   # словарь {относительный_путь: статус}
 
     def set_vcs_status(self, status: dict):
         self.vcs_status = status
+        # Обновляем весь вид (это может быть тяжело, но для простоты – так)
         self.dataChanged.emit(self.index(0,0), self.index(self.rowCount()-1, self.columnCount()-1))
 
     def rootIndex(self):
@@ -38,12 +38,12 @@ class FileSystemModel(QFileSystemModel):
                 self.icon_cache[ext] = icon
             return icon
         elif role == Qt.ForegroundRole:
-            # Цвет текста в зависимости от VCS статуса
+            # Цвет текста в зависимости от статуса VCS
             path = self.filePath(index)
-            rel_path = os.path.relpath(path, self.rootPath())
-            status = self.vcs_status.get(rel_path.replace('\\', '/'), '')
+            rel_path = os.path.relpath(path, self.rootPath()).replace('\\', '/')
+            status = self.vcs_status.get(rel_path, '')
             if status == 'ignored':
-                return QBrush(QColor(100, 100, 100))
+                return QBrush(QColor(128, 128, 128))
             elif status == 'staged':
                 return QBrush(QColor(0, 255, 0))
             elif status == 'modified':
@@ -51,7 +51,7 @@ class FileSystemModel(QFileSystemModel):
             elif status == 'deleted':
                 return QBrush(QColor(255, 0, 0))
             elif status == 'untracked':
-                return QBrush(QColor(0, 100, 200))
+                return QBrush(QColor(0, 150, 200))
             return None
         return super().data(index, role)
 
