@@ -1,3 +1,4 @@
+# output_data_tab_t.py
 import re
 import platform
 from datetime import datetime
@@ -6,7 +7,7 @@ from PySide6.QtWidgets import (
     QPushButton, QLineEdit, QCheckBox, QFileDialog,
     QApplication, QComboBox
 )
-from PySide6.QtCore import Qt, QSettings, QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor, QKeySequence, QShortcut, QFont
 
 class output_data_tab_t(QWidget):
@@ -19,7 +20,6 @@ class output_data_tab_t(QWidget):
         self.current_filter = "ALL"
         self.messages = []
 
-        # Цвета для разных типов
         self.color_info = QColor("#d4d4d4")
         self.color_error = QColor("#f14c4c")
         self.color_warning = QColor("#e5c07b")
@@ -70,7 +70,8 @@ class output_data_tab_t(QWidget):
         QShortcut(QKeySequence.Copy, self.output_area, self.copy_selected)
         QShortcut(QKeySequence("Ctrl+F"), self, self._focus_search)
 
-        self.append_message("Панель вывода готова (кроссплатформенная).", "INFO")
+        self.output_area.cursorPositionChanged.connect(self._check_for_error_link)
+        self.append_message("Панель вывода данных готова.", "INFO")
 
     def _get_mono_font(self):
         if platform.system() == "Windows":
@@ -102,7 +103,6 @@ class output_data_tab_t(QWidget):
             color = self.color_warning
 
         self.messages.append((full_text, msg_type, timestamp))
-
         if self._should_display(msg_type):
             self._append_colored_text(full_text, color)
             if self.auto_scroll:
@@ -117,8 +117,8 @@ class output_data_tab_t(QWidget):
         cursor.insertText(text, fmt)
 
     def _scroll_to_bottom(self):
-        scrollbar = self.output_area.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        sb = self.output_area.verticalScrollBar()
+        sb.setValue(sb.maximum())
 
     def _should_display(self, msg_type):
         filter_map = {"Все": "ALL", "Инфо": "INFO", "Ошибки": "ERROR", "Предупреждения": "WARNING"}
@@ -176,3 +176,42 @@ class output_data_tab_t(QWidget):
             self.output_area.setTextCursor(cursor)
         else:
             self.append_message(f"Текст '{text}' не найден.", "WARNING")
+
+    # Навигация по ошибкам
+    def _check_for_error_link(self):
+        cursor = self.output_area.textCursor()
+        cursor.select(QTextCursor.SelectionType.LineUnderCursor)
+        line_text = cursor.selectedText()
+        info = self._parse_error_line(line_text)
+        if info:
+            self.output_area.viewport().setCursor(Qt.PointingHandCursor)
+            self.output_area.setProperty("nav_info", info)
+        else:
+            self.output_area.viewport().setCursor(Qt.ArrowCursor)
+            self.output_area.setProperty("nav_info", None)
+
+    def _parse_error_line(self, text: str):
+        patterns = [
+            re.compile(r'File "([^"]+)", line (\d+)'),
+            re.compile(r'^([^:]+):(\d+):\d*:'),
+            re.compile(r'^([^(]+)\((\d+)\)\s*:'),
+        ]
+        for pattern in patterns:
+            match = pattern.search(text)
+            if match:
+                file_path, line_str = match.groups()
+                try:
+                    line = int(line_str)
+                    return file_path, line
+                except ValueError:
+                    continue
+        return None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            info = self.output_area.property("nav_info")
+            if info:
+                file_path, line = info
+                self.navigate_to.emit(file_path, line)
+                return
+        super().mousePressEvent(event)

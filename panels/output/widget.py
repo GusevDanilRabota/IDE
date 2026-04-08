@@ -1,3 +1,4 @@
+# widget.py
 from PySide6.QtWidgets import QDockWidget, QTabWidget
 from .output_data_tab import output_data_tab_t
 from .multi_terminal_tab import multi_terminal_panel_t

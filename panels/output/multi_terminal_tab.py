@@ -1,3 +1,4 @@
+# multi_terminal_tab.py
 import platform
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
@@ -5,9 +6,10 @@ from PySide6.QtWidgets import (
     QDialogButtonBox, QMessageBox, QSplitter, QMenu, QInputDialog
 )
 from PySide6.QtCore import Qt
-from .terminal_tab import terminal_tab_t
+from .terminal_tab import terminal_tab_t   # изменён импорт
 
 class multi_terminal_dialog_t(QDialog):
+    # ... (без изменений, как в предыдущей версии) ...
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Новый терминал")
@@ -16,17 +18,14 @@ class multi_terminal_dialog_t(QDialog):
 
         layout.addWidget(QLabel("Выберите командную оболочку:"))
         self.shell_combo = QComboBox()
-        
-        # Кроссплатформенные записи
         if platform.system() == "Windows":
             self.shell_combo.addItem("CMD", ("cmd", [], "CMD"))
             self.shell_combo.addItem("PowerShell", ("powershell", ["-Command"], "PowerShell"))
         else:
-            self.shell_combo.addItem("Bash", ("/bin/bash", ["-c"], "Bash"))
+            self.shell_combo.addItem("Bash", ("/bin/bash", ["-i"], "Bash"))
             self.shell_combo.addItem("Sh", ("/bin/sh", ["-c"], "Sh"))
-            if platform.system() == "Darwin":  # macOS
-                self.shell_combo.addItem("Zsh", ("/bin/zsh", ["-c"], "Zsh"))
-        
+            if platform.system() == "Darwin":
+                self.shell_combo.addItem("Zsh", ("/bin/zsh", ["-i"], "Zsh"))
         self.shell_combo.addItem("Пользовательская...", (None, None, None))
         self.shell_combo.currentIndexChanged.connect(self._on_selection_changed)
         layout.addWidget(self.shell_combo)
@@ -66,7 +65,9 @@ class multi_terminal_dialog_t(QDialog):
             name = self.custom_name.text().strip() or path
             return (path, args, name)
 
+
 class multi_terminal_panel_t(QWidget):
+    # ... (без изменений, но импорт terminal_tab_t теперь корректен) ...
     def __init__(self, parent=None):
         super().__init__(parent)
         splitter = QSplitter(Qt.Horizontal)
@@ -74,7 +75,6 @@ class multi_terminal_panel_t(QWidget):
         layout.addWidget(splitter)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # Правая панель (список терминалов)
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -87,7 +87,6 @@ class multi_terminal_panel_t(QWidget):
         self.new_terminal_btn.clicked.connect(self._create_new_terminal)
         right_layout.addWidget(self.new_terminal_btn)
 
-        # Левая панель (стек терминалов)
         self.terminal_stack = QStackedWidget()
         splitter.addWidget(self.terminal_stack)
         splitter.addWidget(right_widget)
