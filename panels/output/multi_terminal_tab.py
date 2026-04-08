@@ -1,6 +1,3 @@
-# multi_terminal_tab.py
-# -*- coding: utf-8 -*-
-
 import platform
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
@@ -10,34 +7,39 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from .terminal_tab import terminal_tab_t
 
-
 class multi_terminal_dialog_t(QDialog):
-    """ДИАЛОГ СОЗДАНИЯ НОВОГО ТЕРМИНАЛА С ВЫБОРОМ ОБОЛОЧКИ"""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("НОВЫЙ ТЕРМИНАЛ")
+        self.setWindowTitle("Новый терминал")
         self.setModal(True)
         layout = QVBoxLayout(self)
 
-        layout.addWidget(QLabel("ВЫБЕРИТЕ КОМАНДНУЮ ОБОЛОЧКУ:"))
+        layout.addWidget(QLabel("Выберите командную оболочку:"))
         self.shell_combo = QComboBox()
-        self.shell_combo.addItem("CMD (WINDOWS)", ("cmd", ["/c"], "CMD"))
-        self.shell_combo.addItem("POWERSHELL", ("powershell", ["-Command"], "POWERSHELL"))
-        self.shell_combo.addItem("BASH (LINUX/MAC)", ("/bin/bash", ["-c"], "BASH"))
-        self.shell_combo.addItem("SH", ("/bin/sh", ["-c"], "SH"))
-        self.shell_combo.addItem("ПОЛЬЗОВАТЕЛЬСКАЯ...", (None, None, None))
+        
+        # Кроссплатформенные записи
+        if platform.system() == "Windows":
+            self.shell_combo.addItem("CMD", ("cmd", [], "CMD"))
+            self.shell_combo.addItem("PowerShell", ("powershell", ["-Command"], "PowerShell"))
+        else:
+            self.shell_combo.addItem("Bash", ("/bin/bash", ["-c"], "Bash"))
+            self.shell_combo.addItem("Sh", ("/bin/sh", ["-c"], "Sh"))
+            if platform.system() == "Darwin":  # macOS
+                self.shell_combo.addItem("Zsh", ("/bin/zsh", ["-c"], "Zsh"))
+        
+        self.shell_combo.addItem("Пользовательская...", (None, None, None))
         self.shell_combo.currentIndexChanged.connect(self._on_selection_changed)
         layout.addWidget(self.shell_combo)
 
         self.custom_widget = QWidget()
         custom_layout = QVBoxLayout(self.custom_widget)
-        custom_layout.addWidget(QLabel("ПУТЬ К ОБОЛОЧКЕ:"))
+        custom_layout.addWidget(QLabel("Путь к оболочке:"))
         self.custom_path = QLineEdit()
         custom_layout.addWidget(self.custom_path)
-        custom_layout.addWidget(QLabel("АРГУМЕНТЫ (ЧЕРЕЗ ПРОБЕЛ):"))
+        custom_layout.addWidget(QLabel("Аргументы (через пробел):"))
         self.custom_args = QLineEdit()
         custom_layout.addWidget(self.custom_args)
-        custom_layout.addWidget(QLabel("ОТОБРАЖАЕМОЕ ИМЯ:"))
+        custom_layout.addWidget(QLabel("Отображаемое имя:"))
         self.custom_name = QLineEdit()
         custom_layout.addWidget(self.custom_name)
         layout.addWidget(self.custom_widget)
@@ -64,9 +66,7 @@ class multi_terminal_dialog_t(QDialog):
             name = self.custom_name.text().strip() or path
             return (path, args, name)
 
-
 class multi_terminal_panel_t(QWidget):
-    """ПАНЕЛЬ С НЕСКОЛЬКИМИ ТЕРМИНАЛАМИ (СПИСОК СПРАВА, СТЕК СЛЕВА)"""
     def __init__(self, parent=None):
         super().__init__(parent)
         splitter = QSplitter(Qt.Horizontal)
@@ -74,7 +74,7 @@ class multi_terminal_panel_t(QWidget):
         layout.addWidget(splitter)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # ПРАВАЯ ПАНЕЛЬ
+        # Правая панель (список терминалов)
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -83,13 +83,12 @@ class multi_terminal_panel_t(QWidget):
         self.terminal_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.terminal_list.customContextMenuRequested.connect(self._show_context_menu)
         right_layout.addWidget(self.terminal_list)
-        self.new_terminal_btn = QPushButton("+ НОВЫЙ ТЕРМИНАЛ")
+        self.new_terminal_btn = QPushButton("+ Новый терминал")
         self.new_terminal_btn.clicked.connect(self._create_new_terminal)
         right_layout.addWidget(self.new_terminal_btn)
 
-        # ЛЕВАЯ ПАНЕЛЬ
+        # Левая панель (стек терминалов)
         self.terminal_stack = QStackedWidget()
-
         splitter.addWidget(self.terminal_stack)
         splitter.addWidget(right_widget)
         splitter.setSizes([800, 200])
@@ -115,7 +114,6 @@ class multi_terminal_panel_t(QWidget):
         new_name, ok = QInputDialog.getText(self, "Переименовать", "Новое имя:", text=old_name)
         if ok and new_name:
             item.setText(new_name)
-            # ОБНОВЛЯЕМ ИМЯ В ТЕРМИНАЛЕ
             terminal = self.terminal_stack.widget(item.data(Qt.UserRole))
             if terminal:
                 terminal.shell_name = new_name
@@ -132,19 +130,18 @@ class multi_terminal_panel_t(QWidget):
         widget = self.terminal_stack.widget(index)
         self.terminal_stack.removeWidget(widget)
         widget.deleteLater()
-        # ПЕРЕКЛЮЧАЕМСЯ НА ДРУГОЙ
         if self.terminal_list.count() > 0:
             self.terminal_list.setCurrentRow(0)
 
     def _create_default_terminal(self):
         if platform.system() == "Windows":
             shell_path = "cmd"
-            shell_args = ["/c"]
+            shell_args = []
             shell_name = "CMD (по умолчанию)"
         else:
-            shell_path = "sh"
-            shell_args = ["-c"]
-            shell_name = "Sh (по умолчанию)"
+            shell_path = "/bin/bash"
+            shell_args = ["-i"]
+            shell_name = "Bash (по умолчанию)"
         self._add_terminal(shell_path, shell_args, shell_name)
 
     def _create_new_terminal(self):

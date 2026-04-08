@@ -39,6 +39,7 @@ class MainWindow(QMainWindow):
         # СОЕДИНЕНИЕ СИГНАЛОВ
         self.file_panel.file_activated.connect(self.editor.open_file)
         global_signals.message_to_output.connect(self.output_panel.append_message)
+        global_signals.open_file_at_line.connect(self._open_file_at_line)
 
         # ОБНОВЛЕНИЕ СТРУКТУРЫ ПРИ ОТКРЫТИИИ И ИЗМЕНЕНИИ ФАЙЛА
         self.editor.file_opened.connect(self._update_outline)
@@ -67,6 +68,17 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         save_window_geometry(self)
         super().closeEvent(event)
+
+    def _open_file_at_line(self, file_path, line):
+        # Открыть файл, если ещё не открыт
+        self.editor.open_file(file_path)
+        # Переместить курсор на строку
+        # Для QPlainTextEdit: находим блок по номеру строки
+        block = self.editor.document().findBlockByLineNumber(line - 1)
+        cursor = self.editor.textCursor()
+        cursor.setPosition(block.position())
+        self.editor.setTextCursor(cursor)
+        self.editor.centerCursor()
 
 
 if __name__ == "__main__":
