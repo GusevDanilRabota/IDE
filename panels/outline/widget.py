@@ -58,6 +58,11 @@ class OutlinePanel(QDockWidget):
         self.vcs = None
         self.current_project_path = None
 
+        # вкладка VCS (дополнить)
+        self.staged_tree = QTreeView()
+        self.unstaged_tree = QTreeView()
+        # кнопки: Stage (>>), Unstage (<<), Diff, Discard
+
         # Сигналы
         self.commit_btn.clicked.connect(self._commit)
         self.refresh_btn.clicked.connect(self._refresh_vcs)

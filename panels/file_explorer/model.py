@@ -11,7 +11,12 @@ class FileSystemModel(QFileSystemModel):
         self.setRootPath(QDir.currentPath())
         self.setFilter(QDir.AllDirs | QDir.Files | QDir.NoDotAndDotDot)
         self.icon_provider = QFileIconProvider()
-        self.icon_cache = {}  # кэш иконок по расширению
+        self.icon_cache = {}    # кэш иконок по расширению
+        self.vcs_status = {}    # будет заполняться извне
+
+    def set_vcs_status(self, status: dict):
+        self.vcs_status = status
+        self.dataChanged.emit(self.index(0,0), self.index(self.rowCount()-1, self.columnCount()-1))
 
     def rootIndex(self):
         return self.index(self.rootPath())
@@ -27,13 +32,27 @@ class FileSystemModel(QFileSystemModel):
             info = self.fileInfo(index)
             ext = os.path.splitext(info.fileName())[1].lower()
             if ext in self.icon_cache:
-                return self.icon_cache[ext]
-            icon = self.icon_provider.icon(info)
-            self.icon_cache[ext] = icon
+                icon = self.icon_cache[ext]
+            else:
+                icon = self.icon_provider.icon(info)
+                self.icon_cache[ext] = icon
             return icon
         elif role == Qt.ForegroundRole:
-            # Статус VCS можно будет добавить позже через дополнительную модель
-            pass
+            # Цвет текста в зависимости от VCS статуса
+            path = self.filePath(index)
+            rel_path = os.path.relpath(path, self.rootPath())
+            status = self.vcs_status.get(rel_path.replace('\\', '/'), '')
+            if status == 'ignored':
+                return QBrush(QColor(100, 100, 100))
+            elif status == 'staged':
+                return QBrush(QColor(0, 255, 0))
+            elif status == 'modified':
+                return QBrush(QColor(255, 255, 0))
+            elif status == 'deleted':
+                return QBrush(QColor(255, 0, 0))
+            elif status == 'untracked':
+                return QBrush(QColor(0, 100, 200))
+            return None
         return super().data(index, role)
 
 

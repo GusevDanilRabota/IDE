@@ -24,7 +24,6 @@ class FileExplorerPanel(QDockWidget):
 
         # Панель инструментов
         toolbar = QToolBar()
-        # Исправленный вызов setIconSize
         icon_size = self.style().pixelMetric(self.style().PixelMetric.PM_SmallIconSize)
         toolbar.setIconSize(QSize(icon_size, icon_size))
 
