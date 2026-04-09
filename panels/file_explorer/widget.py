@@ -1,12 +1,13 @@
-# widget.py (дополненный)
 import os
 from PySide6.QtCore import QSettings, Signal, Qt, QSize
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QDockWidget, QTreeView, QVBoxLayout, QWidget, QLineEdit,
-    QMenu, QToolBar, QComboBox, QLabel
+    QMenu, QToolBar, QComboBox, QLabel, QFileDialog
 )
 from .model import FileSystemModel, FileSystemProxyModel
 from .actions import FileExplorerActions
+from core.signals import global_signals
 
 class FileExplorerPanel(QDockWidget):
     file_activated = Signal(str)
@@ -14,9 +15,7 @@ class FileExplorerPanel(QDockWidget):
     def __init__(self, parent=None):
         super().__init__("Файлы", parent)
         self.setObjectName("FileExplorerPanel")
-        self.setFeatures(QDockWidget.DockWidgetClosable |
-                         QDockWidget.DockWidgetMovable |
-                         QDockWidget.DockWidgetFloatable)
+        self.setFeatures(QDockWidget.DockWidgetClosable | QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
 
         main_widget = QWidget()
         layout = QVBoxLayout(main_widget)
@@ -37,6 +36,10 @@ class FileExplorerPanel(QDockWidget):
         toolbar.addWidget(QLabel("Фильтр:"))
         toolbar.addWidget(self.filter_combo)
         toolbar.addSeparator()
+
+        self.action_change_root = QAction("Сменить корень")
+        self.action_change_root.triggered.connect(self._choose_root)
+        toolbar.addAction(self.action_change_root)
 
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Поиск файлов...")
@@ -74,6 +77,12 @@ class FileExplorerPanel(QDockWidget):
         self._pinned_folders = []
         self._vcs = None
         self._load_settings()
+
+        settings = QSettings()
+        saved_root = settings.value("file_explorer/root_path", "")
+        if saved_root and os.path.isdir(saved_root):
+            self.model.setRootPath(saved_root)
+            self.tree.setRootIndex(self.proxy_model.mapFromSource(self.model.rootIndex()))
 
     def set_vcs(self, vcs):
         self._vcs = vcs
@@ -121,7 +130,6 @@ class FileExplorerPanel(QDockWidget):
         # Действия контроля версий (если VCS активна)
         if self._vcs and index.isValid():
             path = self.actions._current_path()
-            # Определяем относительный путь от корня репозитория
             try:
                 rel_path = os.path.relpath(path, self.model.rootPath()).replace('\\', '/')
             except ValueError:
@@ -140,6 +148,13 @@ class FileExplorerPanel(QDockWidget):
             if status and status != 'ignored':
                 vcs_menu.addSeparator()
                 vcs_menu.addAction("Показать изменения (diff)", lambda: self._show_diff(rel_path))
+
+        # Сделать корневой папкой (добавленная функциональность)
+        if index.isValid():
+            src = self.proxy_model.mapToSource(index)
+            if self.model.isDir(src):
+                menu.addSeparator()
+                menu.addAction("Сделать корневой", self._make_current_root)
 
         # Навигация по дереву
         menu.addAction(self.actions.action_collapse_all)
@@ -216,3 +231,48 @@ class FileExplorerPanel(QDockWidget):
 
     def refresh(self):
         self.actions._refresh()
+
+    def set_root_path(self, new_path: str):
+        """Устанавливает новую корневую директорию для файлового дерева."""
+        if not os.path.isdir(new_path):
+            return
+        # Сохраняем старый путь для сравнения
+        old_path = self.model.rootPath()
+        if os.path.samefile(old_path, new_path):
+            return
+
+        # Обновляем модель
+        self.model.setRootPath(new_path)
+        self.tree.setRootIndex(self.proxy_model.mapFromSource(self.model.rootIndex()))
+
+        # Обновляем VCS, если он привязан
+        if self._vcs:
+            self._vcs.repo_path = os.path.abspath(new_path)
+            self._vcs.vcs_dir = os.path.join(self._vcs.repo_path, ".myvcs")
+            self._vcs._init_repo()   # переинициализируем репозиторий (создаст, если нет)
+            self.update_vcs_status()
+
+        # Сохраняем в настройках
+        settings = QSettings()
+        settings.setValue("file_explorer/root_path", new_path)
+
+        # Оповещаем другие компоненты (например, центральный редактор)
+        global_signals.message_to_output.emit(f"Корневая папка изменена: {new_path}")
+
+        # Обновляем заголовок окна или статус-бар (опционально)
+        main_window = self.window()
+        if hasattr(main_window, 'setWindowTitle'):
+            main_window.setWindowTitle(f"IDE COLLECTIVE - {new_path}")
+        global_signals.root_path_changed.emit(new_path)
+
+    def _choose_root(self):
+        """Открывает диалог выбора папки и устанавливает её как корневую."""
+        new_root = QFileDialog.getExistingDirectory(self, "Выбрать корневую папку", self.model.rootPath())
+        if new_root:
+            self.set_root_path(new_root)
+
+    def _make_current_root(self):
+        """Устанавливает текущую выбранную папку как корневую."""
+        path = self.actions._current_path()
+        if path and os.path.isdir(path):
+            self.set_root_path(path)

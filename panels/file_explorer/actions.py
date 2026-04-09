@@ -78,6 +78,7 @@ class FileExplorerActions:
             try:
                 with open(path, 'w', encoding='utf-8'): pass
                 self._refresh()
+                self.panel.update_vcs_status()   # добавлено
             except Exception as e:
                 QMessageBox.warning(self.tree, "Ошибка", str(e))
 
@@ -91,6 +92,7 @@ class FileExplorerActions:
             try:
                 os.mkdir(path)
                 self._refresh()
+                self.panel.update_vcs_status()   # добавлено
             except Exception as e:
                 QMessageBox.warning(self.tree, "Ошибка", str(e))
 
@@ -110,6 +112,7 @@ class FileExplorerActions:
                 except Exception as e:
                     QMessageBox.warning(self.tree, "Ошибка", str(e))
             self._refresh()
+            self.panel.update_vcs_status()   # добавлено
 
     def _move_to_trash(self):
         paths = self._current_paths()
@@ -130,6 +133,7 @@ class FileExplorerActions:
             try:
                 os.rename(path, new_path)
                 self._refresh()
+                self.panel.update_vcs_status()   # добавлено
             except Exception as e:
                 QMessageBox.warning(self.tree, "Ошибка", str(e))
 
@@ -201,4 +205,5 @@ class FileExplorerActions:
                     except:
                         shutil.copy2(src, dst)
             self._refresh()
+            self.panel.update_vcs_status()   # добавлено
             event.accept()

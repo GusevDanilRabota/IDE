@@ -278,6 +278,9 @@ class VCSRepository(QObject):
             raise ValueError(f"Не удалось загрузить коммит {commit_hash}")
 
         tree = commit.get("tree", {})
+        # Получаем текущий статус файлов
+        current_status = self.get_status()
+
         for root, dirs, files in os.walk(self.repo_path):
             if self.vcs_dir in root:
                 continue
@@ -286,8 +289,12 @@ class VCSRepository(QObject):
                 rel_root = ''
             for f in files:
                 rel_path = os.path.join(rel_root, f).replace('\\', '/')
+                # Удаляем только те файлы, которые находятся под контролем версий
+                # и отсутствуют в новом дереве
                 if rel_path not in tree:
-                    os.remove(os.path.join(root, f))
+                    if rel_path in current_status and current_status[rel_path] not in ('untracked', 'ignored'):
+                        os.remove(os.path.join(root, f))
+
         for rel_path, blob_hash in tree.items():
             target_path = os.path.join(self.repo_path, rel_path)
             self._load_blob(blob_hash, target_path)
@@ -429,3 +436,18 @@ class VCSRepository(QObject):
         if current_hash == staged_hash:
             return "Нет изменений"
         return f"Файл изменён (staging: {staged_hash[:8]}, current: {current_hash[:8]})"
+    
+    def change_root(self, new_path: str):
+        """Изменяет корень репозитория (переинициализирует)."""
+        self.repo_path = os.path.abspath(new_path)
+        self.vcs_dir = os.path.join(self.repo_path, ".myvcs")
+        self.objects_dir = os.path.join(self.vcs_dir, "objects")
+        self.packs_dir = os.path.join(self.vcs_dir, "packs")
+        self.refs_dir = os.path.join(self.vcs_dir, "refs")
+        self.heads_dir = os.path.join(self.refs_dir, "heads")
+        self.tags_dir = os.path.join(self.refs_dir, "tags")
+        self.index_file = os.path.join(self.vcs_dir, "index.json")
+        self.ignore_file = os.path.join(self.repo_path, ".myvcsignore")
+        self.config_file = os.path.join(self.vcs_dir, "config")
+        self._init_repo()   # заново инициализирует, прочитает HEAD, staging и т.д.
+        self.status_changed.emit()

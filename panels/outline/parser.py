@@ -88,16 +88,15 @@ def parse_c(source_code: str) -> List[OutlineNode]:
     if not PYPARSER_AVAILABLE:
         return []
 
-    parser = c_parser.CParser()
     root_nodes = []
     try:
-        # Парсим код. Для корректной работы могут потребоваться заглушки для системных заголовков.
+        parser = c_parser.CParser()
         ast = parser.parse(source_code)
         visitor = _CFuncVisitor()
         visitor.visit(ast)
         root_nodes = visitor.functions
     except Exception as e:
-        # Если pycparser не может разобрать код (например, из-за отсутствия заголовков), просто возвращаем пустой список
+        # Если pycparser не может разобрать код, просто возвращаем пустой список
         print(f"Ошибка парсинга C: {e}")
         return []
     return root_nodes
