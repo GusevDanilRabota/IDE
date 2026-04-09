@@ -5,5 +5,6 @@ class GlobalSignals(QObject):
     message_to_output = Signal(str)
     open_file_at_line = Signal(str, int)
     vcs_status_changed = Signal()   # новый сигнал
+    root_path_changed = Signal(str)
 
 global_signals = GlobalSignals()

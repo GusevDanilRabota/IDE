@@ -214,6 +214,11 @@ class OutlinePanel(QDockWidget):
             try:
                 self.vcs.checkout(branch)
                 self._refresh_all()
+                # Обновляем редактор, если текущий файл изменился
+                main_window = self.window()
+                if hasattr(main_window, 'editor') and main_window.editor.current_file_path:
+                    # Перезагружаем файл
+                    main_window.editor.open_file(main_window.editor.current_file_path)
             except Exception as e:
                 QMessageBox.warning(self, "Ошибка переключения", str(e))
 

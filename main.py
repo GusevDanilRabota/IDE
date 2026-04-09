@@ -1,17 +1,17 @@
-# main.py (фрагменты)
-import sys
 import os
-from PySide6.QtWidgets import QApplication, QMainWindow
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QTextCursor
+import sys
 
-from core.settings import save_window_geometry, restore_window_geometry
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QApplication, QMainWindow
+
+from core.settings import restore_window_geometry, save_window_geometry
 from core.signals import global_signals
-from panels.file_explorer import FileExplorerPanel
+from core.vcs import VCSRepository
 from panels.editor import CentralEditor
-from panels.output import interaction_panel_t
+from panels.file_explorer import FileExplorerPanel
 from panels.outline import OutlinePanel
-from core.vcs import VCSRepository   # новая VCS
+from panels.output import interaction_panel_t
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -49,22 +49,28 @@ class MainWindow(QMainWindow):
         # Навигация по ошибкам
         self.output_panel.output_data_tab.navigate_to.connect(self._open_file_at_line)
 
-        # Инициализация VCS (корень проекта – текущая рабочая папка)
-        project_root = os.getcwd()
+        # Инициализация VCS: корень – текущая папка из файлового дерева
+        project_root = self.file_panel.model.rootPath()
         self.vcs = VCSRepository(project_root)
-        self.outline_panel.set_vcs(self.vcs)           # передаём VCS в панель структуры
-        self.file_panel.set_vcs(self.vcs)              # передаём VCS в панель файлов (для отображения статусов)
+        self.outline_panel.set_vcs(self.vcs)
+        self.file_panel.set_vcs(self.vcs)
 
-        # Обновляем статусы VCS периодически (например, при изменении фокуса)
+        # Обновляем статусы VCS
         self.vcs.status_changed.connect(self._on_vcs_status_changed)
+
+        # Подключаем сигнал смены корневой папки
+        global_signals.root_path_changed.connect(self._on_root_changed)
 
         # Восстановление геометрии
         restore_window_geometry(self)
 
+        # Устанавливаем заголовок окна с корнем
+        self.setWindowTitle(f"IDE COLLECTIVE - {project_root}")
+
     def _update_outline(self):
         code = self.editor.get_code()
         ext = self.editor.get_file_extension()
-        if ext not in ['.py', '.c', '.h', '.asm', '.s']:
+        if ext not in [".py", ".c", ".h", ".asm", ".s"]:
             self.outline_panel.clear()
             return
         self.outline_panel.update_from_code(code, ext)
@@ -89,8 +95,19 @@ class MainWindow(QMainWindow):
             self.editor.centerCursor()
 
     def _on_vcs_status_changed(self):
-        # Обновляем отображение статусов в дереве файлов
         self.file_panel.update_vcs_status()
+
+    def _on_root_changed(self, new_root: str):
+        # Очищаем редактор
+        self.editor.setPlainText("")
+        self.editor.current_file_path = None
+        # Очищаем структуру
+        self.outline_panel.clear()
+        # Обновляем заголовок
+        self.setWindowTitle(f"IDE COLLECTIVE - {new_root}")
+        global_signals.message_to_output.emit(
+            f"Корневая папка изменена на {new_root}, редактор очищен."
+        )
 
     def closeEvent(self, event):
         save_window_geometry(self)
@@ -104,6 +121,7 @@ def load_stylesheet(app):
             app.setStyleSheet(f.read())
     else:
         print("Файл стилей не найден, используются стандартные настройки")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

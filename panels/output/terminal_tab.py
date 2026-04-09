@@ -42,7 +42,6 @@ class terminal_tab_t(QWidget):
         self.output_area = QPlainTextEdit()
         self.output_area.setReadOnly(True)
         self.output_area.setFont(self._get_mono_font())
-        self._apply_style()
 
         self.input_line = QLineEdit()
         self.input_line.setFont(self._get_mono_font())
@@ -89,6 +88,9 @@ class terminal_tab_t(QWidget):
         QShortcut(QKeySequence.Copy, self.output_area, self.copy_selected)
         QShortcut(QKeySequence.Paste, self.input_line, self.paste_to_input)
 
+        # Применяем стили после создания всех виджетов
+        self._apply_style()
+
     def _init_history(self):
         self.history = []
         self.history_index = -1
@@ -106,13 +108,22 @@ class terminal_tab_t(QWidget):
         settings = QSettings("MyIDE", "Terminal")
         bg = settings.value("bg_color", "#1e1e1e")
         fg = settings.value("text_color", "#d4d4d4")
-        self.output_area.setStyleSheet(f"""
+        style = f"""
             QPlainTextEdit {{
                 background-color: {bg};
                 color: {fg};
                 selection-background-color: #264f78;
             }}
-        """)
+            QLineEdit {{
+                background-color: {bg};
+                color: {fg};
+                selection-background-color: #264f78;
+                border: 1px solid #3c3c3c;
+                padding: 2px;
+            }}
+        """
+        self.output_area.setStyleSheet(style)
+        self.input_line.setStyleSheet(style)
         font_str = settings.value("font", "")
         if font_str:
             font = QFont()
@@ -169,9 +180,6 @@ class terminal_tab_t(QWidget):
     def _on_bookmark_selected(self, index):
         if index <= 0:
             return
-        path = self.bookmark_combo.itemData(index)
-        if path and os.path.isdir(path):
-            self._change_directory(path)
         self.bookmark_combo.setCurrentIndex(0)
 
     def start_shell(self):
@@ -195,27 +203,11 @@ class terminal_tab_t(QWidget):
         self.history_index = len(self.history)
         self.input_line.clear()
 
-        if cmd.startswith("cd "):
-            self._change_directory(cmd[3:].strip())
-            return
-
+        # Отправляем команду в процесс, включая cd
         self.append_output(cmd + "\n")
         data = (cmd + "\n").encode(self._get_encoding(), errors='replace')
         self.process.write(data)
         self.last_command_output = ""
-
-    def _change_directory(self, path):
-        if os.path.isabs(path):
-            new_path = path
-        else:
-            new_path = os.path.join(self.current_dir, path)
-        new_path = os.path.normpath(new_path)
-        if os.path.isdir(new_path):
-            self.current_dir = new_path
-            self.process.setWorkingDirectory(self.current_dir)
-            self.append_output(f"Директория изменена: {self.current_dir}\n")
-        else:
-            self.append_output(f"cd: {path}: Нет такой директории\n")
 
     def _on_output(self):
         data = self.process.readAllStandardOutput()
